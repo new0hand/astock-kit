@@ -402,15 +402,60 @@ hermes gateway status
 
 > **注意**：资金流向（get_fund_flow.py）依赖东方财富接口，必须直连网络，不能挂代理。如需测试：`帮我查一下平安银行的资金流向`
 
-## 定时更新
+## 定时更新（crontab）
 
-每天收盘后跑增量更新：
+每天收盘后自动拉取最新数据，无需手动操作。
+
+### 设置步骤
 
 ```bash
-python3 scripts/download_fast.py --period daily --update
+# 1. 打开 crontab 编辑器（首次会提示选编辑器，选 nano 或 vim 都行）
+crontab -e
+
+# 2. 在打开的文件末尾加上这一行（每天16:00自动更新，周一到周五）：
+0 16 * * 1-5 cd ~/.hermes/skills/astock-kit-skills/local && /usr/bin/python3 download_fast.py --period daily --update >> /tmp/astock-update.log 2>&1
+
+# 3. 保存退出（nano: Ctrl+O 回车 Ctrl+X；vim: :wq 回车）
+
+# 4. 验证是否生效
+crontab -l
 ```
 
-可配合 crontab 或 Hermes scheduler 自动执行。
+### 说明
+
+- `0 16 * * 1-5`：每周一到周五 16:00 执行（A股15:00收盘，等1小时确保数据源更新完）
+- `>> /tmp/astock-update.log 2>&1`：日志追加写入，出问题可以查
+- macOS 首次使用 crontab 可能弹出"终端想要管理您的文件"权限弹窗，点允许即可
+
+### 常用操作
+
+```bash
+# 查看当前定时任务
+crontab -l
+
+# 修改定时任务
+crontab -e
+
+# 删除所有定时任务
+crontab -r
+
+# 查看更新日志
+cat /tmp/astock-update.log
+
+# 手动执行一次（测试用）
+cd ~/.hermes/skills/astock-kit-skills/local && python3 download_fast.py --period daily --update
+```
+
+### macOS 注意事项
+
+macOS 需要给 cron 授权"完全磁盘访问权限"才能正常执行脚本：
+
+1. 打开 系统设置 → 隐私与安全性 → 完全磁盘访问权限
+2. 点左下角 + 号
+3. 按 `Cmd+Shift+G`，输入 `/usr/sbin/cron`，点打开
+4. 确保 cron 的开关是打开状态
+
+如果不授权，crontab 任务可能静默失败且不报错。
 
 ## 免责声明
 
