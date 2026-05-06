@@ -1,0 +1,26 @@
+# 数据文件（太大不提交）
+data/
+*.parquet
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 缓存
+.cache/
+*.db
+
+# 报告输出
+reports/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
