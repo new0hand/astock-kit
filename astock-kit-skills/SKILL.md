@@ -1,9 +1,11 @@
 ---
-name: astock-kit
+name: astock-kit-skills
 description: 使用 AKShare 库获取和分析中国 A 股市场数据。支持：股票实时行情、历史K线、财务报表、估值指标、资金流向、技术指标、智能投资评分、综合分析报告。多数据源自动回退（雪球/同花顺/网易163/本地BaoStock），当用户需要获取 A 股股价、分析个股基本面、查询财务数据、计算技术指标、分析资金流向时使用此 skill。
 ---
 
 # AKShare A股数据分析 Skill
+
+> **⚠️ 重要规则：所有数据查询必须使用 scripts/ 目录下的 Python 脚本。禁止自己用 curl 调用任何 API。禁止自己编写或生成 curl_fallback.md 等文件。脚本内部已实现多数据源自动回退，不需要额外的回退方案。**
 
 使用 AKShare 库获取中国 A 股市场数据并进行分析。多数据源自动回退，无需注册或 Token。
 
