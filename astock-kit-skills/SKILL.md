@@ -60,6 +60,25 @@ python stock_analyzer.py 002475 -o report.md
 | `calc_technical.py` | 技术指标计算 | MA/MACD/RSI/KDJ/BOLL |
 | `stock_analyzer.py` | 综合分析报告 | 合并所有数据的完整报告 |
 
+### 本地数据工具（local/ 目录）
+
+本地数据基于 BaoStock + DuckDB，全市场毫秒级查询，**优先使用这些脚本**。
+
+| 脚本 | 功能 | 示例 |
+|------|------|------|
+| `local/query_data.py quote` | 个股最新行情 | `python local/query_data.py quote 000001` |
+| `local/query_data.py high` | 近N天最高价 | `python local/query_data.py high 000001 --days 60` |
+| `local/query_data.py ma20` | MA20均线买卖信号 | `python local/query_data.py ma20 000001` |
+| `local/query_data.py scan-ma20` | 全市场MA20金叉扫描 | `python local/query_data.py scan-ma20` |
+| `local/query_data.py top-gainers` | 涨幅榜TOP20 | `python local/query_data.py top-gainers --days 5` |
+| `local/query_data.py sql` | 自定义SQL查询 | `python local/query_data.py sql "SELECT * FROM data WHERE code='000001' LIMIT 10"` |
+| `local/backtest.py` | MA20策略回测 | `python local/backtest.py ma20 000001` |
+| `local/backtest.py --all` | 全市场回测 | `python local/backtest.py ma20 --all --top 20` |
+| `local/download_fast.py` | 数据下载/更新 | `python local/download_fast.py --period daily --update` |
+| `local/download_fast.py --summary` | 数据摘要 | `python local/download_fast.py --summary` |
+
+> **使用场景**：涉及全市场扫描、回测、批量查询时，必须用 local/ 脚本（本地数据），不要自己写代码或 curl。
+
 ### 工具脚本
 
 | 脚本 | 功能 | 说明 |
