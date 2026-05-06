@@ -12,11 +12,18 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL="$SCRIPT_DIR/skill/scripts"
 
+AKSHARE_VER=$(python3 -c "import akshare; print(akshare.__version__)" 2>/dev/null || echo "未安装")
+AKSHARE_LATEST=$(pip3 index versions akshare 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+
 echo "============================================================"
 echo "  资金流向接口测试"
 echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "  接口: push2his.eastmoney.com (东方财富)"
 echo "  函数: ak.stock_individual_fund_flow()"
+echo "  AKShare 版本: $AKSHARE_VER"
+if [ -n "$AKSHARE_LATEST" ] && [ "$AKSHARE_LATEST" != "$AKSHARE_VER" ]; then
+    echo -e "  ${YELLOW}⚠️  最新版: $AKSHARE_LATEST — pip install akshare --upgrade${NC}"
+fi
 echo "============================================================"
 
 PASS=0

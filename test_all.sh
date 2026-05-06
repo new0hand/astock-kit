@@ -75,10 +75,17 @@ if [ -f "$CACHE_FILE" ]; then
     rm "$CACHE_FILE"
 fi
 
+AKSHARE_VER=$(python3 -c "import akshare; print(akshare.__version__)" 2>/dev/null || echo "未安装")
+AKSHARE_LATEST=$(pip3 index versions akshare 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+
 echo "============================================================"
 echo "  astock-kit 全功能测试"
 echo "  测试时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "  测试股票: $STOCK (平安银行) / $STOCK2 (贵州茅台)"
+echo "  AKShare 版本: $AKSHARE_VER"
+if [ -n "$AKSHARE_LATEST" ] && [ "$AKSHARE_LATEST" != "$AKSHARE_VER" ]; then
+    echo -e "  ${YELLOW}⚠️  最新版: $AKSHARE_LATEST — pip install akshare --upgrade${NC}"
+fi
 echo "============================================================"
 
 # ============================================================
