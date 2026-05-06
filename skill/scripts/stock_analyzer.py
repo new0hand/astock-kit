@@ -10,6 +10,7 @@ AKShare 个股综合分析脚本
     python stock_analyzer.py 600519 --output 茅台分析.txt
 """
 import argparse
+import os
 import sys
 from datetime import datetime, timedelta
 import warnings
@@ -22,6 +23,11 @@ try:
 except ImportError:
     print("请先安装依赖: pip install akshare pandas")
     sys.exit(1)
+
+# 本地数据路径
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "..", "data")
+DAILY_FILE = os.path.join(DATA_DIR, "all_daily.parquet")
 
 # 配置 pandas 显示选项
 pd.set_option('display.max_columns', None)
@@ -91,50 +97,34 @@ def analyze_stock(code: str, output_file: str = None):
     log(f"分析时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log("=" * 70)
 
-    # 1. 基本信息
-    log("\n【1. 基本信息】")
+    # 1-2. 基本信息 + 实时行情（合并用雪球接口）
+    log("\n【1. 基本信息 & 实时行情】")
     log("-" * 50)
     try:
-        info = ak.stock_individual_info_em(symbol=code)
-        if info is not None and len(info) > 0:
-            for _, row in info.iterrows():
-                log(f"{row['item']}: {row['value']}")
+        xq = ak.stock_individual_spot_xq(symbol=code_with_prefix)
+        if xq is not None and not xq.empty:
+            data = dict(zip(xq['item'], xq['value']))
+            log(f"股票名称: {data.get('名称', '')}")
+            log(f"现价: {data.get('现价', '')}")
+            log(f"涨跌幅: {data.get('涨幅', '')}%")
+            log(f"最高: {data.get('最高', '')}")
+            log(f"最低: {data.get('最低', '')}")
+            log(f"今开: {data.get('今开', '')}")
+            log(f"昨收: {data.get('昨收', '')}")
+            log(f"成交量: {data.get('成交量', '')}")
+            log(f"成交额: {data.get('成交额', '')}")
+            log(f"换手率: {data.get('换手率', '')}")
+            log(f"市盈率(动态): {data.get('市盈率(动)', '')}")
+            log(f"市盈率(TTM): {data.get('市盈率(TTM)', '')}")
+            log(f"市净率: {data.get('市净率', '')}")
+            log(f"股息率(TTM): {data.get('股息率(TTM)', '')}%")
+            log(f"52周最高: {data.get('52周最高', '')}")
+            log(f"52周最低: {data.get('52周最低', '')}")
+            log(f"今年以来涨幅: {data.get('今年以来涨幅', '')}%")
         else:
-            log("无法获取基本信息")
+            log("无法获取数据")
     except Exception as e:
-        log(f"获取基本信息失败: {e}")
-
-    # 2. 实时行情
-    log("\n【2. 实时行情】")
-    log("-" * 50)
-    try:
-        spot = ak.stock_zh_a_spot_em()
-        stock_row = spot[spot['代码'] == code]
-        if len(stock_row) > 0:
-            row = stock_row.iloc[0]
-            log(f"股票名称: {row['名称']}")
-            log(f"最新价: {row['最新价']}")
-            log(f"涨跌幅: {row['涨跌幅']}%")
-            log(f"涨跌额: {row['涨跌额']}")
-            log(f"成交量: {row['成交量']}手")
-            log(f"成交额: {row['成交额'] / 1e8:.2f}亿")
-            log(f"振幅: {row['振幅']}%")
-            log(f"最高: {row['最高']}")
-            log(f"最低: {row['最低']}")
-            log(f"今开: {row['今开']}")
-            log(f"昨收: {row['昨收']}")
-            log(f"换手率: {row['换手率']}%")
-            log(f"量比: {row['量比']}")
-            log(f"市盈率(动态): {row['市盈率-动态']}")
-            log(f"市净率: {row['市净率']}")
-            log(f"总市值: {row['总市值'] / 1e8:.2f}亿")
-            log(f"流通市值: {row['流通市值'] / 1e8:.2f}亿")
-            log(f"60日涨跌幅: {row['60日涨跌幅']}%")
-            log(f"年初至今涨跌幅: {row['年初至今涨跌幅']}%")
-        else:
-            log(f"未找到股票 {code}")
-    except Exception as e:
-        log(f"获取实时行情失败: {e}")
+        log(f"获取失败: {e}")
 
     # 3. 近期K线走势
     log("\n【3. 近期K线走势（最近30个交易日）】")
@@ -142,13 +132,34 @@ def analyze_stock(code: str, output_file: str = None):
     try:
         end_date = datetime.now().strftime('%Y%m%d')
         start_date = (datetime.now() - timedelta(days=60)).strftime('%Y%m%d')
-        hist = ak.stock_zh_a_hist(
-            symbol=code,
-            period="daily",
-            start_date=start_date,
-            end_date=end_date,
-            adjust="qfq"
-        )
+        hist = None
+
+        # 优先本地数据
+        if os.path.exists(DAILY_FILE):
+            try:
+                import duckdb
+                con = duckdb.connect()
+                s = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
+                e = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}"
+                hist = con.execute(f"""
+                    SELECT 日期, 开盘, 最高, 最低, 收盘, 成交量, 成交额
+                    FROM read_parquet('{DAILY_FILE}')
+                    WHERE code = '{code}' AND 日期 >= '{s}' AND 日期 <= '{e}'
+                    ORDER BY 日期
+                """).fetchdf()
+                con.close()
+                if len(hist) == 0:
+                    hist = None
+                else:
+                    log(f"（数据来源: 本地 BaoStock）")
+            except:
+                hist = None
+
+        # 回退在线
+        if hist is None:
+            hist = ak.stock_zh_a_hist(symbol=code, period="daily",
+                                       start_date=start_date, end_date=end_date, adjust="qfq")
+
         if hist is not None and len(hist) > 0:
             log(hist.tail(30).to_string(index=False))
 
@@ -253,6 +264,8 @@ def analyze_stock(code: str, output_file: str = None):
         # 使用同花顺财务摘要接口
         fina = ak.stock_financial_abstract_ths(symbol=code, indicator="按报告期")
         if fina is not None and len(fina) > 0:
+            if '报告期' in fina.columns:
+                fina = fina.sort_values('报告期', ascending=False).reset_index(drop=True)
             latest = fina.iloc[0]
             log(f"报告期: {latest.get('报告期', 'N/A')}")
             log(f"净利润: {latest.get('净利润', 'N/A')}")

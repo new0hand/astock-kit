@@ -33,10 +33,14 @@ def get_financial(code: str, use_cache: bool = True):
 
     try:
         df = ak.stock_financial_abstract_ths(symbol=code, indicator="按报告期")
-        
+
         if df is not None and not df.empty:
+            # 按报告期降序排列，取最新的
+            if '报告期' in df.columns:
+                df = df.sort_values('报告期', ascending=False).reset_index(drop=True)
+
             display_financial(df)
-            
+
             if use_cache:
                 cache_set('financial', df.to_dict('records'), code)
         else:

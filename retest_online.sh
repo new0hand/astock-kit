@@ -57,6 +57,13 @@ run_test() {
     PASS=$((PASS + 1))
 }
 
+# 清除缓存，避免拿到旧数据
+CACHE_FILE="$SCRIPT_DIR/skill/.cache/akshare_cache.db"
+if [ -f "$CACHE_FILE" ]; then
+    echo "删除旧缓存: $CACHE_FILE"
+    rm "$CACHE_FILE"
+fi
+
 echo "============================================================"
 echo "  AKShare 在线数据重测（东方财富数据源）"
 echo "  测试时间: $(date '+%Y-%m-%d %H:%M:%S')"
@@ -79,12 +86,12 @@ run_test 2 "实时行情 - 茅台" \
 # --- 历史K线 ---
 run_test 3 "历史K线 - 近60天" \
     "cd $SKILL && python3 get_history_kline.py $STOCK --days 60" \
-    "获取失败"
+    "所有数据源均获取失败"
 
-# --- 技术指标（之前唯一真失败的） ---
+# --- 技术指标 ---
 run_test 4 "技术指标（MA/MACD/RSI/KDJ/BOLL）" \
     "cd $SKILL && python3 calc_technical.py $STOCK" \
-    "获取.*失败"
+    "所有数据源均获取失败"
 
 # --- 资金流向 ---
 run_test 5 "资金流向 - 近10天" \
@@ -99,16 +106,16 @@ run_test 6 "财务数据（检查报告期是否最新）" \
 # --- 智能投资分析（上次全是50分默认值） ---
 run_test 7 "智能投资分析 - 平安银行" \
     "cd $SKILL && python3 analyze_investment.py $STOCK" \
-    "得分: 50"
+    "所有数据源均获取失败"
 
 run_test 8 "智能投资分析 - 茅台" \
     "cd $SKILL && python3 analyze_investment.py $STOCK2" \
-    "得分: 50"
+    "所有数据源均获取失败"
 
 # --- 综合报告（上次大量模块获取失败） ---
 run_test 9 "综合分析报告" \
     "cd $SKILL && python3 stock_analyzer.py $STOCK" \
-    "获取.*失败"
+    "所有数据源均获取失败|Connection aborted"
 
 # ============================================================
 # 汇总

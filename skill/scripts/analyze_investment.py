@@ -9,6 +9,7 @@
     python analyze_investment.py 002475 -o analysis.md
 """
 import argparse
+import os
 import sys
 from datetime import datetime, timedelta
 import warnings
@@ -23,6 +24,11 @@ except ImportError:
     sys.exit(1)
 
 from calc_technical import calc_all_indicators, analyze_signals
+
+# 本地数据路径
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "..", "data")
+DAILY_FILE = os.path.join(DATA_DIR, "all_daily.parquet")
 
 
 def get_code_with_prefix(code: str) -> str:
@@ -56,18 +62,56 @@ class InvestmentAnalyzer:
         except:
             pass
         
-        # 实时行情
+        # 实时行情（雪球，东方财富经常被封）
         try:
-            spot = ak.stock_zh_a_spot_em()
-            self.data['spot'] = spot[spot['代码'] == self.code].iloc[0] if len(spot[spot['代码'] == self.code]) > 0 else None
+            xq_spot = ak.stock_individual_spot_xq(symbol=self.code_with_prefix)
+            if xq_spot is not None:
+                spot_data = dict(zip(xq_spot['item'], xq_spot['value']))
+                self.data['spot'] = pd.Series({
+                    '代码': self.code,
+                    '名称': spot_data.get('名称', ''),
+                    '最新价': spot_data.get('现价', 0),
+                    '涨跌幅': spot_data.get('涨幅', 0),
+                    '最高': spot_data.get('最高', 0),
+                    '最低': spot_data.get('最低', 0),
+                    '成交量': spot_data.get('成交量', 0),
+                    '成交额': spot_data.get('成交额', 0),
+                    '换手率': spot_data.get('换手率', 0),
+                })
         except:
             pass
-        
-        # 历史K线
+
+        # 历史K线（优先本地数据）
         try:
             end = datetime.now().strftime('%Y%m%d')
             start = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-            self.data['kline'] = ak.stock_zh_a_hist(symbol=self.code, period='daily', start_date=start, end_date=end, adjust='qfq')
+            kline = None
+
+            # 本地数据
+            if os.path.exists(DAILY_FILE):
+                try:
+                    import duckdb
+                    con = duckdb.connect()
+                    start_fmt = f"{start[:4]}-{start[4:6]}-{start[6:]}"
+                    end_fmt = f"{end[:4]}-{end[4:6]}-{end[6:]}"
+                    kline = con.execute(f"""
+                        SELECT 日期, 开盘, 最高, 最低, 收盘, 成交量
+                        FROM read_parquet('{DAILY_FILE}')
+                        WHERE code = '{self.code}'
+                          AND 日期 >= '{start_fmt}' AND 日期 <= '{end_fmt}'
+                        ORDER BY 日期
+                    """).fetchdf()
+                    con.close()
+                    if len(kline) == 0:
+                        kline = None
+                except:
+                    kline = None
+
+            # 回退在线
+            if kline is None:
+                kline = ak.stock_zh_a_hist(symbol=self.code, period='daily', start_date=start, end_date=end, adjust='qfq')
+
+            self.data['kline'] = kline
         except:
             pass
         
@@ -84,9 +128,12 @@ class InvestmentAnalyzer:
         except:
             pass
         
-        # 财务数据
+        # 财务数据（排序取最新）
         try:
-            self.data['financial'] = ak.stock_financial_abstract_ths(symbol=self.code, indicator="按报告期")
+            fin = ak.stock_financial_abstract_ths(symbol=self.code, indicator="按报告期")
+            if fin is not None and not fin.empty and '报告期' in fin.columns:
+                fin = fin.sort_values('报告期', ascending=False).reset_index(drop=True)
+            self.data['financial'] = fin
         except:
             pass
     
@@ -292,17 +339,22 @@ class InvestmentAnalyzer:
                     lines.append(f"- {signal}")
                 lines.append("")
         
-        # 基本信息
+        # 基本信息（兼容雪球和东方财富两种字段名）
         if spot is not None:
             lines.append("---\n")
             lines.append("## 📋 基本信息\n")
             lines.append("| 指标 | 数值 |")
             lines.append("|------|------|")
-            lines.append(f"| 最新价 | {spot['最新价']} 元 |")
-            lines.append(f"| 涨跌幅 | {spot['涨跌幅']}% |")
-            lines.append(f"| 总市值 | {spot['总市值']/1e8:.2f} 亿 |")
-            lines.append(f"| 市盈率 | {spot['市盈率-动态']} |")
-            lines.append(f"| 市净率 | {spot['市净率']} |")
+            price = spot.get('最新价', spot.get('现价', ''))
+            change = spot.get('涨跌幅', spot.get('涨幅%', ''))
+            pe = spot.get('市盈率-动态', spot.get('市盈率(TTM)', ''))
+            pb = spot.get('市净率', '')
+            lines.append(f"| 最新价 | {price} 元 |")
+            lines.append(f"| 涨跌幅 | {change}% |")
+            if '总市值' in spot and spot['总市值']:
+                lines.append(f"| 总市值 | {float(spot['总市值'])/1e8:.2f} 亿 |")
+            lines.append(f"| 市盈率 | {pe} |")
+            lines.append(f"| 市净率 | {pb} |")
         
         lines.append("\n---\n")
         lines.append("> ⚠️ 以上分析仅供参考，不构成投资建议。投资有风险，入市需谨慎。")

@@ -14,18 +14,23 @@
     python calc_technical.py 002475 --indicators MA MACD RSI
 """
 import argparse
+import os
 import sys
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
 try:
-    import akshare as ak
     import pandas as pd
     import numpy as np
 except ImportError:
-    print("请先安装依赖: pip install akshare pandas numpy")
+    print("请先安装依赖: pip install pandas numpy")
     sys.exit(1)
+
+# 本地数据路径
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "..", "data")
+DAILY_FILE = os.path.join(DATA_DIR, "all_daily.parquet")
 
 
 def calc_ma(df: pd.DataFrame, periods: list = [5, 10, 20, 60]) -> pd.DataFrame:
@@ -290,24 +295,61 @@ def main():
     
     args = parser.parse_args()
     
-    # 获取K线数据
+    # 获取K线数据：优先本地，回退在线
     end_date = datetime.now().strftime('%Y%m%d')
     start_date = (datetime.now() - timedelta(days=args.days)).strftime('%Y%m%d')
+    df = None
 
-    try:
-        df = ak.stock_zh_a_hist(
-            symbol=args.code,
-            period='daily',
-            start_date=start_date,
-            end_date=end_date,
-            adjust='qfq'
-        )
-    except Exception as e:
-        print(f"获取K线数据失败: {e}")
-        sys.exit(1)
+    # 1. 尝试本地数据
+    if os.path.exists(DAILY_FILE):
+        try:
+            import duckdb
+            con = duckdb.connect()
+            start_fmt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
+            end_fmt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}"
+            df = con.execute(f"""
+                SELECT 日期, 开盘, 最高, 最低, 收盘, 成交量
+                FROM read_parquet('{DAILY_FILE}')
+                WHERE code = '{args.code}'
+                  AND 日期 >= '{start_fmt}' AND 日期 <= '{end_fmt}'
+                ORDER BY 日期
+            """).fetchdf()
+            con.close()
+            if len(df) > 0:
+                print(f"从本地数据加载: {len(df)} 条记录")
+            else:
+                df = None
+        except Exception:
+            df = None
 
-    if df is None or df.empty:
-        print("无法获取数据")
+    # 2. 回退在线（东方财富 → 网易163）
+    if df is None:
+        try:
+            import akshare as ak
+            df = ak.stock_zh_a_hist(
+                symbol=args.code, period='daily',
+                start_date=start_date, end_date=end_date, adjust='qfq'
+            )
+            if df is not None and not df.empty:
+                print(f"从东方财富在线获取: {len(df)} 条记录")
+        except Exception:
+            pass
+
+    if df is None:
+        try:
+            import akshare as ak
+            sym = f"sz{args.code}" if args.code.startswith(('0', '3')) else f"sh{args.code}"
+            df = ak.stock_zh_a_daily(symbol=sym, start_date=start_date, end_date=end_date, adjust='qfq')
+            if df is not None and not df.empty:
+                # 网易163 列名映射
+                col_map = {'open': '开盘', 'high': '最高', 'low': '最低', 'close': '收盘', 'volume': '成交量'}
+                df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+                print(f"从网易163在线获取: {len(df)} 条记录")
+        except Exception:
+            pass
+
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        print("所有数据源均获取失败")
         sys.exit(1)
     
     # 计算所有指标

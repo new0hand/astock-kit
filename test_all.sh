@@ -68,6 +68,13 @@ run_test() {
     fi
 }
 
+# 清除缓存，避免拿到旧数据
+CACHE_FILE="$SCRIPT_DIR/skill/.cache/akshare_cache.db"
+if [ -f "$CACHE_FILE" ]; then
+    echo "删除旧缓存: $CACHE_FILE"
+    rm "$CACHE_FILE"
+fi
+
 echo "============================================================"
 echo "  astock-kit 全功能测试"
 echo "  测试时间: $(date '+%Y-%m-%d %H:%M:%S')"
