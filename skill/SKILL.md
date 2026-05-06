@@ -1,24 +1,24 @@
 ---
 name: akshare-stock
-description: 使用 AKShare 库获取和分析中国 A 股市场数据。AKShare 是免费开源的 Python 金融数据接口库，无需注册或 Token。支持：股票实时行情、历史K线、财务报表、估值指标、资金流向、技术指标、定时任务等。当用户需要获取 A 股股价、分析个股基本面、查询财务数据、计算技术指标、分析资金流向时使用此 skill。
+description: 使用 AKShare 库获取和分析中国 A 股市场数据。支持：股票实时行情、历史K线、财务报表、估值指标、资金流向、技术指标、智能投资评分、综合分析报告。多数据源自动回退（雪球/同花顺/网易163/本地BaoStock），当用户需要获取 A 股股价、分析个股基本面、查询财务数据、计算技术指标、分析资金流向时使用此 skill。
 ---
 
 # AKShare A股数据分析 Skill
 
-使用 AKShare 库获取中国 A 股市场数据并进行分析。AKShare 是**免费开源**的金融数据接口，无需注册或 Token。
+使用 AKShare 库获取中国 A 股市场数据并进行分析。多数据源自动回退，无需注册或 Token。
 
 ## 快速开始
 
 ### 环境准备
 
 ```bash
-pip install akshare pandas numpy pyyaml
+pip install akshare pandas numpy pyyaml duckdb
 ```
 
 ### 使用脚本
 
 ```bash
-cd e:\AIproJect\A_Share\.agent\skills\akshare-stock\scripts
+cd scripts
 
 # 智能投资分析（推荐）
 python analyze_investment.py 002475
@@ -40,21 +40,21 @@ python stock_analyzer.py 002475 -o report.md
 
 ### 数据获取脚本
 
-| 脚本 | 功能 | 示例 |
-|------|------|------|
-| `get_realtime_quote.py` | 实时行情 | `python get_realtime_quote.py 002475` |
-| `get_history_kline.py` | 历史K线 | `python get_history_kline.py 002475 --days 60` |
-| `get_valuation.py` | 估值指标 | `python get_valuation.py 002475` |
-| `get_fund_flow.py` | 资金流向 | `python get_fund_flow.py 002475 --days 10` |
-| `get_financial.py` | 财务数据 | `python get_financial.py 002475` |
-| `get_shareholders.py` | 股东信息 | `python get_shareholders.py 002475` |
-| `get_dividend.py` | 分红数据 | `python get_dividend.py 002475` |
+| 脚本 | 功能 | 数据源 | 示例 |
+|------|------|--------|------|
+| `get_realtime_quote.py` | 实时行情 | 雪球（主）→ 东方财富（备） | `python get_realtime_quote.py 002475` |
+| `get_history_kline.py` | 历史K线 | 本地BaoStock → 东方财富 → 网易163 | `python get_history_kline.py 002475 --days 60` |
+| `get_valuation.py` | 估值指标 | 雪球 | `python get_valuation.py 002475` |
+| `get_fund_flow.py` | 资金流向 | 东方财富（⚠️需直连） | `python get_fund_flow.py 002475 --days 10` |
+| `get_financial.py` | 财务数据 | 同花顺 | `python get_financial.py 002475` |
+| `get_shareholders.py` | 股东信息 | 同花顺 | `python get_shareholders.py 002475` |
+| `get_dividend.py` | 分红数据 | 同花顺 | `python get_dividend.py 002475` |
 
 ### 分析脚本
 
 | 脚本 | 功能 | 说明 |
 |------|------|------|
-| `analyze_investment.py` | 智能投资分析 | 多维度评分 + 投资建议 |
+| `analyze_investment.py` | 智能投资分析 | 四维度评分（估值/成长/资金/技术）+ 投资建议 |
 | `calc_technical.py` | 技术指标计算 | MA/MACD/RSI/KDJ/BOLL |
 | `stock_analyzer.py` | 综合分析报告 | 合并所有数据的完整报告 |
 
@@ -62,8 +62,29 @@ python stock_analyzer.py 002475 -o report.md
 
 | 脚本 | 功能 | 说明 |
 |------|------|------|
-| `cache_manager.py` | 数据缓存 | SQLite 本地缓存 |
+| `cache_manager.py` | 数据缓存 | SQLite 本地缓存，自动过期 |
 | `scheduler.py` | 定时任务 | 自动获取数据和生成报告 |
+
+## 数据源与回退策略
+
+脚本内置多数据源自动回退，单个源挂了不影响使用：
+
+| 数据 | 优先级1 | 优先级2 | 优先级3 |
+|------|---------|---------|---------|
+| 实时行情/估值 | 雪球 `stock_individual_spot_xq` | — | — |
+| 历史K线 | 本地 BaoStock Parquet | 东方财富 `stock_zh_a_hist` | 网易163 `stock_zh_a_daily` |
+| 技术指标 | 同上（获取K线后本地计算） | | |
+| 资金流向 | 东方财富 `stock_individual_fund_flow` | — | — |
+| 财务数据 | 同花顺 `stock_financial_abstract_ths` | — | — |
+| 股东信息 | 同花顺 `stock_main_stock_holder` | — | — |
+| 分红记录 | 同花顺 `stock_history_dividend_detail` | — | — |
+
+### 代理/网络注意事项
+
+- 大部分接口（雪球、同花顺、网易163）**挂代理也能正常使用**
+- **资金流向**（东方财富 `push2his.eastmoney.com`）**必须直连**，不能走代理
+- 东方财富反爬严格，K线和全市场行情接口已封，已切换到其他数据源
+- 如用 v2rayN/Clash，Python 的 requests 会读 macOS 系统代理，需关闭 TUN 模式或将 `eastmoney.com` 加入直连规则
 
 ## 核心功能
 
@@ -73,12 +94,13 @@ python stock_analyzer.py 002475 -o report.md
 python analyze_investment.py 002475
 ```
 
-自动分析：
-- 📊 估值分析（PE/PB/股息率）
-- 📈 成长性分析（营收/利润增速）
-- 💵 资金面分析（主力资金流向）
-- 📉 技术面分析（均线/MACD/RSI）
-- 综合评分 + 投资建议
+四维度加权评分（满分100）：
+- 📊 估值分析（30%）：PE/PB/股息率
+- 📈 成长性分析（30%）：营收/利润增速
+- 💵 资金面分析（20%）：主力资金流向
+- 📉 技术面分析（20%）：均线/MACD/RSI/KDJ
+
+评分参考：80+ 强烈推荐 / 65-80 推荐 / 50-65 持有观望 / <35 建议回避
 
 ### 2. 技术指标
 
@@ -88,18 +110,20 @@ python calc_technical.py 002475
 
 支持指标：
 - **MA**: 5/10/20/60日均线
-- **MACD**: DIF, DEA, MACD柱
+- **MACD**: DIF, DEA, MACD柱（12/26/9）
 - **RSI**: 6/12/24日
 - **KDJ**: K, D, J
-- **BOLL**: 上轨/中轨/下轨
+- **BOLL**: 上轨/中轨/下轨（20日 ± 2标准差）
 
 ### 3. 数据缓存
 
-自动缓存避免重复请求：
+自动缓存避免重复请求（SQLite）：
 - 实时行情：1分钟
-- 日K线：1小时
+- 日K线/资金流向/估值：1小时
 - 财务数据：7天
-- 股东数据：30天
+- 股东/分红数据：30天
+
+如遇数据异常，删缓存重试：`rm .cache/akshare_cache.db`
 
 ### 4. 定时任务
 
@@ -119,30 +143,31 @@ python scheduler.py
 
 ```bash
 python analyze_investment.py 002475 -o 分析报告.md
+python stock_analyzer.py 002475 -o 综合报告.txt
 ```
 
 ## 文件结构
 
 ```
-akshare-stock/
+skill/
 ├── SKILL.md                 # 本文档
-├── config.yaml              # 配置文件
+├── config.yaml              # 配置文件（股票池、定时任务、缓存）
 ├── references/
-│   ├── api_reference.md     # API 参考
+│   ├── api_reference.md     # AKShare API 参考
 │   └── official_docs.md     # 官方文档索引
 └── scripts/
-    ├── analyze_investment.py   # 智能分析
-    ├── calc_technical.py       # 技术指标
-    ├── cache_manager.py        # 数据缓存
-    ├── scheduler.py            # 定时任务
-    ├── stock_analyzer.py       # 综合分析
-    ├── get_realtime_quote.py   # 实时行情
-    ├── get_history_kline.py    # 历史K线
-    ├── get_valuation.py        # 估值指标
-    ├── get_fund_flow.py        # 资金流向
-    ├── get_financial.py        # 财务数据
-    ├── get_shareholders.py     # 股东信息
-    └── get_dividend.py         # 分红数据
+    ├── get_realtime_quote.py   # 实时行情（雪球）
+    ├── get_history_kline.py    # 历史K线（本地→东方财富→网易163）
+    ├── calc_technical.py       # 技术指标 MA/MACD/RSI/KDJ/BOLL
+    ├── get_fund_flow.py        # 资金流向（东方财富，需直连）
+    ├── get_financial.py        # 财务数据（同花顺）
+    ├── get_valuation.py        # 估值指标（雪球）
+    ├── get_shareholders.py     # 股东信息（同花顺）
+    ├── get_dividend.py         # 分红数据（同花顺）
+    ├── analyze_investment.py   # 智能投资分析（四维度评分）
+    ├── stock_analyzer.py       # 综合分析报告
+    ├── cache_manager.py        # SQLite 缓存管理
+    └── scheduler.py            # 定时任务
 ```
 
 ## 参考资源
@@ -151,3 +176,11 @@ akshare-stock/
 - [AKShare 官方文档](references/official_docs.md)
 - **官网**: https://akshare.akfamily.xyz
 - **GitHub**: https://github.com/akfamily/akshare
+
+## AKShare 版本
+
+AKShare 更新频繁，接口变动时升级通常能修复：
+
+```bash
+pip install akshare --upgrade
+```
