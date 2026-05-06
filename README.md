@@ -315,15 +315,47 @@ pip3 install akshare --upgrade
 
 ## Hermes 部署
 
-```bash
-# 安装 Skill
-hermes skills install ./skill --force
+### 安装 Skill
 
-# 微信网关
+```bash
+# 安装 Python 依赖
+pip3 install akshare baostock pandas numpy pyarrow duckdb pyyaml
+
+# 从 GitHub 安装 Skill 到 Hermes（一行搞定）
+hermes skills install new0hand/astock-kit/skill --force
+```
+
+### 下载全市场数据（首次需要）
+
+```bash
+# 克隆仓库（需要本地数据工具和测试脚本）
+git clone https://github.com/new0hand/astock-kit.git
+cd astock-kit/scripts
+
+# 全量日线（约30分钟）
+python3 download_fast.py --period daily
+
+# 验证安装
+cd ..
+bash test_all.sh
+```
+
+### 更新 Skill
+
+```bash
+hermes skills install new0hand/astock-kit/skill --force
+```
+
+### 微信网关
+
+```bash
 hermes gateway setup
 hermes pairing approve weixin XXXX
+```
 
-# 后台运行
+### 后台运行
+
+```bash
 hermes gateway status
 ```
 
