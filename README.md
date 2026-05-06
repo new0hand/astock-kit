@@ -25,7 +25,7 @@ pip3 install akshare
 ### 1. 下载数据
 
 ```bash
-cd scripts
+cd astock-kit-skills/local
 
 # 测试（下载 10 只）
 python3 download_fast.py --period daily --test 10
@@ -55,7 +55,7 @@ python3 download_fast.py --summary
 ### 2. 查询数据
 
 ```bash
-cd scripts
+cd astock-kit-skills/local
 
 # 个股最新行情
 python3 query_data.py quote 000001
@@ -79,7 +79,7 @@ python3 query_data.py sql "SELECT * FROM data WHERE code='000001' LIMIT 10"
 ### 3. 策略回测
 
 ```bash
-cd scripts
+cd astock-kit-skills/local
 
 # 单只股票 MA20 回测
 python3 backtest.py ma20 000001
@@ -97,7 +97,7 @@ python3 backtest.py ma20 --all --top 20
 ### 4. 实时分析（AKShare）
 
 ```bash
-cd skill/scripts
+cd astock-kit-skills/scripts
 
 # 实时行情
 python3 get_realtime_quote.py 000001
@@ -174,7 +174,7 @@ python3 stock_analyzer.py 000001 -o report.txt
 
 ### 缓存机制
 
-脚本使用 SQLite 缓存 (`skill/.cache/akshare_cache.db`)，避免重复请求：
+脚本使用 SQLite 缓存 (`astock-kit-skills/.cache/akshare_cache.db`)，避免重复请求：
 
 | 数据类型 | 缓存过期时间 |
 |---------|------------|
@@ -186,7 +186,7 @@ python3 stock_analyzer.py 000001 -o report.txt
 | 股东数据 | 30 天 |
 | 分红数据 | 30 天 |
 
-如遇数据异常，先删缓存再重试：`rm skill/.cache/akshare_cache.db`
+如遇数据异常，先删缓存再重试：`rm astock-kit-skills/.cache/akshare_cache.db`
 
 ## 智能投资分析评分模型
 
@@ -269,38 +269,38 @@ bash retest_fund_flow.sh
 astock-kit/
 ├── README.md
 ├── .gitignore
-├── test_all.sh                    # 全量测试（30项）
-├── retest_online.sh               # 在线接口重测（9项）
-├── retest_fund_flow.sh            # 资金流向专项测试（5项）
-├── scripts/                       # 本地数据工具
-│   ├── download_fast.py           # 数据下载（多进程，推荐）
-│   ├── download.py                # 数据下载（单进程）
-│   ├── query_data.py              # DuckDB 查询
-│   └── backtest.py                # 策略回测
-├── skill/                         # Hermes Skill（实时查询）
-│   ├── SKILL.md                   # Skill 定义（Hermes 读取）
-│   ├── config.yaml                # 配置（股票池、定时任务、缓存）
-│   ├── references/                # API 文档
-│   └── scripts/                   # AKShare 在线查询脚本
-│       ├── get_realtime_quote.py  # 实时行情（雪球）
-│       ├── get_history_kline.py   # 历史K线（本地→东方财富→网易163）
-│       ├── calc_technical.py      # 技术指标 MA/MACD/RSI/KDJ/BOLL
-│       ├── get_fund_flow.py       # 资金流向（东方财富，需直连）
-│       ├── get_financial.py       # 财务数据（同花顺）
-│       ├── get_valuation.py       # 估值 PE/PB（雪球）
-│       ├── get_shareholders.py    # 股东信息（同花顺）
-│       ├── get_dividend.py        # 分红记录（同花顺）
-│       ├── analyze_investment.py  # 智能投资分析（四维度评分）
-│       ├── stock_analyzer.py      # 综合分析报告
-│       ├── cache_manager.py       # SQLite 缓存管理
-│       └── scheduler.py           # 定时任务
-└── data/                          # 数据目录（.gitignore，不提交）
-    ├── stock_list.parquet         # 股票列表
-    ├── all_daily.parquet          # 全市场日线（合并）
-    ├── all_60m.parquet            # 全市场60分钟线
-    ├── all_5m.parquet             # 全市场5分钟线
-    ├── all_dividend.parquet       # 全市场除权分红
-    └── daily/                     # 每只股票单独文件
+├── test_all.sh                        # 全量测试（30项）
+├── retest_online.sh                   # 在线接口重测（9项）
+├── retest_fund_flow.sh                # 资金流向专项测试（5项）
+└── astock-kit-skills/                 # Hermes Skill 目录（hermes skills install 安装这个）
+    ├── SKILL.md                       # Skill 定义（Hermes 读取）
+    ├── config.yaml                    # 配置（股票池、定时任务、缓存）
+    ├── references/                    # API 文档
+    ├── scripts/                       # AKShare 在线查询脚本
+    │   ├── get_realtime_quote.py      # 实时行情（雪球）
+    │   ├── get_history_kline.py       # 历史K线（本地→东方财富→网易163）
+    │   ├── calc_technical.py          # 技术指标 MA/MACD/RSI/KDJ/BOLL
+    │   ├── get_fund_flow.py           # 资金流向（东方财富，需直连）
+    │   ├── get_financial.py           # 财务数据（同花顺）
+    │   ├── get_valuation.py           # 估值 PE/PB（雪球）
+    │   ├── get_shareholders.py        # 股东信息（同花顺）
+    │   ├── get_dividend.py            # 分红记录（同花顺）
+    │   ├── analyze_investment.py      # 智能投资分析（四维度评分）
+    │   ├── stock_analyzer.py          # 综合分析报告
+    │   ├── cache_manager.py           # SQLite 缓存管理
+    │   └── scheduler.py               # 定时任务
+    ├── local/                         # 本地数据工具
+    │   ├── download_fast.py           # 数据下载（多进程，推荐）
+    │   ├── download.py                # 数据下载（单进程）
+    │   ├── query_data.py              # DuckDB 查询
+    │   └── backtest.py                # 策略回测
+    └── data/                          # 数据目录（.gitignore，不提交）
+        ├── stock_list.parquet         # 股票列表
+        ├── all_daily.parquet          # 全市场日线（合并）
+        ├── all_60m.parquet            # 全市场60分钟线
+        ├── all_5m.parquet             # 全市场5分钟线
+        ├── all_dividend.parquet       # 全市场除权分红
+        └── daily/                     # 每只股票单独文件
 ```
 
 ## AKShare 版本
@@ -322,7 +322,7 @@ pip3 install akshare --upgrade
 pip3 install akshare baostock pandas numpy pyarrow duckdb pyyaml
 
 # 从 GitHub 安装 Skill 到 Hermes（一行搞定）
-hermes skills install new0hand/astock-kit/skill --force
+hermes skills install new0hand/astock-kit/astock-kit-skills --force
 ```
 
 ### 下载全市场数据（首次需要）
@@ -343,7 +343,7 @@ bash test_all.sh
 ### 更新 Skill
 
 ```bash
-hermes skills install new0hand/astock-kit/skill --force
+hermes skills install new0hand/astock-kit/astock-kit-skills --force
 ```
 
 ### 微信网关

@@ -18,8 +18,8 @@ FAIL=0
 SKIP=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOCAL="$SCRIPT_DIR/scripts"
-SKILL="$SCRIPT_DIR/skill/scripts"
+LOCAL="$SCRIPT_DIR/astock-kit-skills/local"
+SKILL="$SCRIPT_DIR/astock-kit-skills/scripts"
 
 # 测试用股票
 STOCK="000001"        # 平安银行（便宜，方便回测）
@@ -69,7 +69,7 @@ run_test() {
 }
 
 # 清除缓存，避免拿到旧数据
-CACHE_FILE="$SCRIPT_DIR/skill/.cache/akshare_cache.db"
+CACHE_FILE="$SCRIPT_DIR/astock-kit-skills/.cache/akshare_cache.db"
 if [ -f "$CACHE_FILE" ]; then
     echo "删除旧缓存: $CACHE_FILE"
     rm "$CACHE_FILE"

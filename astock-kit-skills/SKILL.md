@@ -1,5 +1,5 @@
 ---
-name: akshare-stock
+name: astock-kit
 description: 使用 AKShare 库获取和分析中国 A 股市场数据。支持：股票实时行情、历史K线、财务报表、估值指标、资金流向、技术指标、智能投资评分、综合分析报告。多数据源自动回退（雪球/同花顺/网易163/本地BaoStock），当用户需要获取 A 股股价、分析个股基本面、查询财务数据、计算技术指标、分析资金流向时使用此 skill。
 ---
 
@@ -149,25 +149,31 @@ python stock_analyzer.py 002475 -o 综合报告.txt
 ## 文件结构
 
 ```
-skill/
-├── SKILL.md                 # 本文档
-├── config.yaml              # 配置文件（股票池、定时任务、缓存）
+astock-kit-skills/
+├── SKILL.md                     # 本文档
+├── config.yaml                  # 配置文件（股票池、定时任务、缓存）
 ├── references/
-│   ├── api_reference.md     # AKShare API 参考
-│   └── official_docs.md     # 官方文档索引
-└── scripts/
-    ├── get_realtime_quote.py   # 实时行情（雪球）
-    ├── get_history_kline.py    # 历史K线（本地→东方财富→网易163）
-    ├── calc_technical.py       # 技术指标 MA/MACD/RSI/KDJ/BOLL
-    ├── get_fund_flow.py        # 资金流向（东方财富，需直连）
-    ├── get_financial.py        # 财务数据（同花顺）
-    ├── get_valuation.py        # 估值指标（雪球）
-    ├── get_shareholders.py     # 股东信息（同花顺）
-    ├── get_dividend.py         # 分红数据（同花顺）
-    ├── analyze_investment.py   # 智能投资分析（四维度评分）
-    ├── stock_analyzer.py       # 综合分析报告
-    ├── cache_manager.py        # SQLite 缓存管理
-    └── scheduler.py            # 定时任务
+│   ├── api_reference.md         # AKShare API 参考
+│   └── official_docs.md         # 官方文档索引
+├── scripts/                     # AKShare 在线查询脚本
+│   ├── get_realtime_quote.py    # 实时行情（雪球）
+│   ├── get_history_kline.py     # 历史K线（本地→东方财富→网易163）
+│   ├── calc_technical.py        # 技术指标 MA/MACD/RSI/KDJ/BOLL
+│   ├── get_fund_flow.py         # 资金流向（东方财富，需直连）
+│   ├── get_financial.py         # 财务数据（同花顺）
+│   ├── get_valuation.py         # 估值指标（雪球）
+│   ├── get_shareholders.py      # 股东信息（同花顺）
+│   ├── get_dividend.py          # 分红数据（同花顺）
+│   ├── analyze_investment.py    # 智能投资分析（四维度评分）
+│   ├── stock_analyzer.py        # 综合分析报告
+│   ├── cache_manager.py         # SQLite 缓存管理
+│   └── scheduler.py             # 定时任务
+├── local/                       # 本地数据工具
+│   ├── download_fast.py         # 数据下载（多进程，推荐）
+│   ├── download.py              # 数据下载（单进程）
+│   ├── query_data.py            # DuckDB 查询
+│   └── backtest.py              # 策略回测
+└── data/                        # 数据目录（.gitignore，不提交）
 ```
 
 ## 参考资源

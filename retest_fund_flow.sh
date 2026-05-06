@@ -10,7 +10,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SKILL="$SCRIPT_DIR/skill/scripts"
+SKILL="$SCRIPT_DIR/astock-kit-skills/scripts"
 
 AKSHARE_VER=$(python3 -c "import akshare; print(akshare.__version__)" 2>/dev/null || echo "未安装")
 AKSHARE_LATEST=$(pip3 index versions akshare 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
@@ -65,9 +65,9 @@ run_test 3 "资金流向 - 002475 立讯精密" \
 # 顺便测下清缓存后的财务数据
 echo ""
 echo -e "${CYAN}--- 附加：财务数据（清缓存后）---${NC}"
-if [ -f "$SCRIPT_DIR/skill/.cache/akshare_cache.db" ]; then
+if [ -f "$SCRIPT_DIR/astock-kit-skills/.cache/akshare_cache.db" ]; then
     echo "删除旧缓存..."
-    rm "$SCRIPT_DIR/skill/.cache/akshare_cache.db"
+    rm "$SCRIPT_DIR/astock-kit-skills/.cache/akshare_cache.db"
 fi
 
 run_test 4 "财务数据 - 000001（应显示2025/2026年报告期）" \

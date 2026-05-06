@@ -29,7 +29,7 @@ except ImportError:
     sys.exit(1)
 
 # ========== 配置 ==========
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 STOCK_LIST_FILE = os.path.join(DATA_DIR, "stock_list.parquet")
 DAYS_BACK = 730  # 两年
 

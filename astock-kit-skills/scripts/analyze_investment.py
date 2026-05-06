@@ -27,7 +27,7 @@ from calc_technical import calc_all_indicators, analyze_signals
 
 # 本地数据路径
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "..", "..", "data")
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
 DAILY_FILE = os.path.join(DATA_DIR, "all_daily.parquet")
 
 

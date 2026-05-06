@@ -23,9 +23,9 @@ except ImportError:
     print("请先安装依赖: pip install pandas")
     sys.exit(1)
 
-# 本地数据路径（astock-kit/data/all_daily.parquet）
+# 本地数据路径（astock-kit-skills/data/all_daily.parquet）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "..", "..", "data")
+DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
 DAILY_FILE = os.path.join(DATA_DIR, "all_daily.parquet")
 
 

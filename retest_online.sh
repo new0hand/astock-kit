@@ -14,7 +14,7 @@ PASS=0
 FAIL=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SKILL="$SCRIPT_DIR/skill/scripts"
+SKILL="$SCRIPT_DIR/astock-kit-skills/scripts"
 
 STOCK="000001"
 STOCK2="600519"
@@ -58,7 +58,7 @@ run_test() {
 }
 
 # 清除缓存，避免拿到旧数据
-CACHE_FILE="$SCRIPT_DIR/skill/.cache/akshare_cache.db"
+CACHE_FILE="$SCRIPT_DIR/astock-kit-skills/.cache/akshare_cache.db"
 if [ -f "$CACHE_FILE" ]; then
     echo "删除旧缓存: $CACHE_FILE"
     rm "$CACHE_FILE"
