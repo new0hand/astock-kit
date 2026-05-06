@@ -37,7 +37,11 @@ def get_db():
     con = duckdb.connect()
     con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{MERGED_FILE}')")
     if os.path.exists(STOCK_LIST_FILE):
-        con.execute(f"CREATE VIEW stock_list AS SELECT * FROM read_parquet('{STOCK_LIST_FILE}')")
+        con.execute(f"""
+            CREATE VIEW stock_list AS
+            SELECT REGEXP_REPLACE(code, '^[a-z]{{2}}\\.', '') AS code, name
+            FROM read_parquet('{STOCK_LIST_FILE}')
+        """)
     return con
 
 
@@ -77,21 +81,20 @@ def cmd_high(con, code, days):
 def cmd_ma20(con, code):
     """20日均线买卖信号"""
     result = con.execute(f"""
-        WITH ma AS (
+        WITH step1 AS (
             SELECT *,
                 AVG(收盘) OVER (
-                    PARTITION BY code
-                    ORDER BY 日期
+                    PARTITION BY code ORDER BY 日期
                     ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
-                ) AS ma20,
-                LAG(收盘) OVER (PARTITION BY code ORDER BY 日期) AS prev_close,
-                LAG(AVG(收盘) OVER (
-                    PARTITION BY code
-                    ORDER BY 日期
-                    ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
-                )) OVER (PARTITION BY code ORDER BY 日期) AS prev_ma20
+                ) AS ma20
             FROM data
             WHERE code = '{code}'
+        ),
+        step2 AS (
+            SELECT *,
+                LAG(收盘) OVER (PARTITION BY code ORDER BY 日期) AS prev_close,
+                LAG(ma20) OVER (PARTITION BY code ORDER BY 日期) AS prev_ma20
+            FROM step1
         )
         SELECT 日期, 收盘, ROUND(ma20, 2) AS ma20,
             CASE
@@ -100,7 +103,7 @@ def cmd_ma20(con, code):
                 WHEN 收盘 > ma20 THEN '均线上方'
                 ELSE '均线下方'
             END AS 信号
-        FROM ma
+        FROM step2
         ORDER BY 日期 DESC
         LIMIT 30
     """).fetchdf()
@@ -114,24 +117,22 @@ def cmd_scan_ma20(con):
         WITH latest AS (
             SELECT code, MAX(日期) AS max_date FROM data GROUP BY code
         ),
-        ma AS (
+        step1 AS (
             SELECT d.*,
                 AVG(d.收盘) OVER (
-                    PARTITION BY d.code
-                    ORDER BY d.日期
+                    PARTITION BY d.code ORDER BY d.日期
                     ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
-                ) AS ma20,
-                LAG(d.收盘) OVER (PARTITION BY d.code ORDER BY d.日期) AS prev_close,
-                LAG(AVG(d.收盘) OVER (
-                    PARTITION BY d.code
-                    ORDER BY d.日期
-                    ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
-                )) OVER (PARTITION BY d.code ORDER BY d.日期) AS prev_ma20
+                ) AS ma20
             FROM data d
-            INNER JOIN latest l ON d.code = l.code
+        ),
+        step2 AS (
+            SELECT *,
+                LAG(收盘) OVER (PARTITION BY code ORDER BY 日期) AS prev_close,
+                LAG(ma20) OVER (PARTITION BY code ORDER BY 日期) AS prev_ma20
+            FROM step1
         )
         SELECT m.code, s.name, m.日期, m.收盘, ROUND(m.ma20, 2) AS ma20, '金叉突破' AS 信号
-        FROM ma m
+        FROM step2 m
         LEFT JOIN stock_list s ON m.code = s.code
         INNER JOIN latest l ON m.code = l.code AND m.日期 = l.max_date
         WHERE m.prev_close < m.prev_ma20 AND m.收盘 >= m.ma20

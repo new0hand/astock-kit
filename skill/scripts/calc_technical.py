@@ -293,18 +293,22 @@ def main():
     # 获取K线数据
     end_date = datetime.now().strftime('%Y%m%d')
     start_date = (datetime.now() - timedelta(days=args.days)).strftime('%Y%m%d')
-    
-    df = ak.stock_zh_a_hist(
-        symbol=args.code,
-        period='daily',
-        start_date=start_date,
-        end_date=end_date,
-        adjust='qfq'
-    )
-    
+
+    try:
+        df = ak.stock_zh_a_hist(
+            symbol=args.code,
+            period='daily',
+            start_date=start_date,
+            end_date=end_date,
+            adjust='qfq'
+        )
+    except Exception as e:
+        print(f"获取K线数据失败: {e}")
+        sys.exit(1)
+
     if df is None or df.empty:
         print("无法获取数据")
-        return
+        sys.exit(1)
     
     # 计算所有指标
     df = calc_all_indicators(df)

@@ -38,7 +38,11 @@ def get_db():
     con = duckdb.connect()
     con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{DAILY_FILE}')")
     if os.path.exists(STOCK_LIST_FILE):
-        con.execute(f"CREATE VIEW stock_list AS SELECT * FROM read_parquet('{STOCK_LIST_FILE}')")
+        con.execute(f"""
+            CREATE VIEW stock_list AS
+            SELECT REGEXP_REPLACE(code, '^[a-z]{{2}}\\.', '') AS code, name
+            FROM read_parquet('{STOCK_LIST_FILE}')
+        """)
     return con
 
 
@@ -57,7 +61,7 @@ def calc_ma20_signals(df):
     return df
 
 
-def run_backtest(df, initial_capital=100000):
+def run_backtest(df, initial_capital=1000000):
     """模拟交易，计算收益和回撤"""
     df = calc_ma20_signals(df)
     signals = df[df["signal"] != 0].copy()
@@ -148,7 +152,7 @@ def run_backtest(df, initial_capital=100000):
     }
 
 
-def backtest_single(con, code, output=None):
+def backtest_single(con, code, output=None, capital=1000000):
     """单只股票回测"""
     df = con.execute(f"SELECT * FROM data WHERE code = '{code}' ORDER BY 日期").fetchdf()
     if len(df) < 30:
@@ -161,7 +165,7 @@ def backtest_single(con, code, output=None):
     except Exception:
         name = code
 
-    result = run_backtest(df)
+    result = run_backtest(df, initial_capital=capital)
     if result is None:
         print(f"{code} {name} 没有产生交易信号")
         return
@@ -176,10 +180,10 @@ def backtest_single(con, code, output=None):
         print(report)
 
 
-def backtest_all(con, top=50):
+def backtest_all(con, top=50, capital=1000000):
     """全市场回测"""
     codes = con.execute("SELECT DISTINCT code FROM data").fetchdf()["code"].tolist()
-    print(f"全市场回测 MA20 策略，共 {len(codes)} 只股票...\n")
+    print(f"全市场回测 MA20 策略，共 {len(codes)} 只股票...（初始资金: {capital:,} 元）\n")
 
     results = []
     for i, code in enumerate(codes):
@@ -190,7 +194,7 @@ def backtest_all(con, top=50):
         if len(df) < 30:
             continue
 
-        result = run_backtest(df)
+        result = run_backtest(df, initial_capital=capital)
         if result is None:
             continue
 
@@ -286,6 +290,7 @@ def main():
     parser.add_argument("--all", action="store_true", help="全市场回测")
     parser.add_argument("--top", type=int, default=50, help="全市场模式显示前N名（默认50）")
     parser.add_argument("-o", "--output", help="输出文件路径（.md）")
+    parser.add_argument("--capital", type=int, default=1000000, help="初始资金（默认100万）")
     args = parser.parse_args()
 
     if not args.code and not args.all:
@@ -296,9 +301,9 @@ def main():
     con = get_db()
 
     if args.all:
-        backtest_all(con, args.top)
+        backtest_all(con, args.top, args.capital)
     else:
-        backtest_single(con, args.code, args.output)
+        backtest_single(con, args.code, args.output, args.capital)
 
 
 if __name__ == "__main__":
