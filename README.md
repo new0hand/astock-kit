@@ -412,8 +412,8 @@ hermes gateway status
 # 1. 打开 crontab 编辑器（首次会提示选编辑器，选 nano 或 vim 都行）
 crontab -e
 
-# 2. 在打开的文件末尾加上这一行（每天16:00自动更新，周一到周五）：
-0 16 * * 1-5 cd ~/.hermes/skills/astock-kit-skills/local && /usr/bin/python3 download_fast.py --period daily --update >> /tmp/astock-update.log 2>&1
+# 2. 在打开的文件末尾加上这一行（每天18:00自动更新，周一到周五）：
+0 18 * * 1-5 cd ~/.hermes/skills/astock-kit-skills/local && /usr/bin/python3 download_fast.py --period daily --update >> /tmp/astock-update.log 2>&1
 
 # 3. 保存退出（nano: Ctrl+O 回车 Ctrl+X；vim: :wq 回车）
 
@@ -423,7 +423,7 @@ crontab -l
 
 ### 说明
 
-- `0 16 * * 1-5`：每周一到周五 16:00 执行（A股15:00收盘，等1小时确保数据源更新完）
+- `0 18 * * 1-5`：每周一到周五 18:00 执行（A股15:00收盘，等3小时确保各数据源完全更新）
 - `>> /tmp/astock-update.log 2>&1`：日志追加写入，出问题可以查
 - macOS 首次使用 crontab 可能弹出"终端想要管理您的文件"权限弹窗，点允许即可
 
@@ -456,6 +456,10 @@ macOS 需要给 cron 授权"完全磁盘访问权限"才能正常执行脚本：
 4. 确保 cron 的开关是打开状态
 
 如果不授权，crontab 任务可能静默失败且不报错。
+
+### "python 想访问你的照片图库" 弹窗
+
+首次运行时 macOS 可能弹出"python3.x 想访问你的照片图库"权限请求。这是 Python 的依赖库（如 matplotlib、Pillow）初始化时扫描系统资源目录触发的 macOS 误判，**本程序不会访问任何照片数据**。直接点**「不允许」**即可，不影响任何功能。
 
 ## 免责声明
 
