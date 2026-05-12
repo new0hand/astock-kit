@@ -412,8 +412,12 @@ hermes gateway status
 # 1. 打开 crontab 编辑器（首次会提示选编辑器，选 nano 或 vim 都行）
 crontab -e
 
-# 2. 在打开的文件末尾加上这一行（每天18:00自动更新，周一到周五）：
+# 2. 在打开的文件末尾加上这一行（北京时间 18:00，根据你的时区换算）
+# 北京时间（UTC+8）：
 0 18 * * 1-5 cd ~/.hermes/skills/astock-kit-skills/local && /usr/bin/python3 download_fast.py --period daily --update >> /tmp/astock-update.log 2>&1
+
+# 夏威夷时间（UTC-10，北京18:00 = 夏威夷00:00）：
+0 0 * * 1-5 cd ~/.hermes/skills/astock-kit-skills/local && /usr/bin/python3 download_fast.py --period daily --update >> /tmp/astock-update.log 2>&1
 
 # 3. 保存退出（nano: Ctrl+O 回车 Ctrl+X；vim: :wq 回车）
 
@@ -423,7 +427,7 @@ crontab -l
 
 ### 说明
 
-- `0 18 * * 1-5`：每周一到周五 18:00 执行（A股15:00收盘，等3小时确保各数据源完全更新）
+- `0 18 * * 1-5`（北京时间）/ `0 0 * * 1-5`（夏威夷时间）：每周一到周五，北京时间 18:00 执行（A股15:00收盘，等3小时确保各数据源完全更新）
 - `>> /tmp/astock-update.log 2>&1`：日志追加写入，出问题可以查
 - macOS 首次使用 crontab 可能弹出"终端想要管理您的文件"权限弹窗，点允许即可
 
