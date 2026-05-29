@@ -24,6 +24,8 @@ except ImportError:
     print("请先安装依赖: pip install akshare pandas")
     sys.exit(1)
 
+from realtime_source import get_spot_dict
+
 # 本地数据路径
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
@@ -100,31 +102,31 @@ def analyze_stock(code: str, output_file: str = None):
     # 1-2. 基本信息 + 实时行情（合并用雪球接口）
     log("\n【1. 基本信息 & 实时行情】")
     log("-" * 50)
-    try:
-        xq = ak.stock_individual_spot_xq(symbol=code_with_prefix)
-        if xq is not None and not xq.empty:
-            data = dict(zip(xq['item'], xq['value']))
-            log(f"股票名称: {data.get('名称', '')}")
-            log(f"现价: {data.get('现价', '')}")
-            log(f"涨跌幅: {data.get('涨幅', '')}%")
-            log(f"最高: {data.get('最高', '')}")
-            log(f"最低: {data.get('最低', '')}")
-            log(f"今开: {data.get('今开', '')}")
-            log(f"昨收: {data.get('昨收', '')}")
-            log(f"成交量: {data.get('成交量', '')}")
-            log(f"成交额: {data.get('成交额', '')}")
-            log(f"换手率: {data.get('换手率', '')}")
-            log(f"市盈率(动态): {data.get('市盈率(动)', '')}")
-            log(f"市盈率(TTM): {data.get('市盈率(TTM)', '')}")
-            log(f"市净率: {data.get('市净率', '')}")
-            log(f"股息率(TTM): {data.get('股息率(TTM)', '')}%")
-            log(f"52周最高: {data.get('52周最高', '')}")
-            log(f"52周最低: {data.get('52周最低', '')}")
-            log(f"今年以来涨幅: {data.get('今年以来涨幅', '')}%")
-        else:
-            log("无法获取数据")
-    except Exception as e:
-        log(f"获取失败: {e}")
+    # 雪球 → 腾讯 回退（统一走共享模块）；估值复用同一份，避免重复请求
+    data, spot_source = get_spot_dict(code, code_with_prefix)
+    if data:
+        log(f"（数据来源: {spot_source}）")
+        if spot_source == '腾讯':
+            log("注意: 腾讯源无动/静市盈率、股息率、52周高低，相关字段留空")
+        log(f"股票名称: {data.get('名称', '')}")
+        log(f"现价: {data.get('现价', '')}")
+        log(f"涨跌幅: {data.get('涨幅', '')}%")
+        log(f"最高: {data.get('最高', '')}")
+        log(f"最低: {data.get('最低', '')}")
+        log(f"今开: {data.get('今开', '')}")
+        log(f"昨收: {data.get('昨收', '')}")
+        log(f"成交量: {data.get('成交量', '')}")
+        log(f"成交额: {data.get('成交额', '')}")
+        log(f"换手率: {data.get('换手率', '')}")
+        log(f"市盈率(动态): {data.get('市盈率(动)', '')}")
+        log(f"市盈率(TTM): {data.get('市盈率(TTM)', '')}")
+        log(f"市净率: {data.get('市净率', '')}")
+        log(f"股息率(TTM): {data.get('股息率(TTM)', '')}%")
+        log(f"52周最高: {data.get('52周最高', '')}")
+        log(f"52周最低: {data.get('52周最低', '')}")
+        log(f"今年以来涨幅: {data.get('今年以来涨幅', '')}%")
+    else:
+        log("无法获取数据（雪球、腾讯均失败）")
 
     # 3. 近期K线走势
     log("\n【3. 近期K线走势（最近30个交易日）】")
@@ -155,15 +157,34 @@ def analyze_stock(code: str, output_file: str = None):
             except:
                 hist = None
 
-        # 回退在线
+        # 回退在线1：东方财富（可能已封）
         if hist is None:
-            hist = ak.stock_zh_a_hist(symbol=code, period="daily",
-                                       start_date=start_date, end_date=end_date, adjust="qfq")
+            try:
+                hist = ak.stock_zh_a_hist(symbol=code, period="daily",
+                                           start_date=start_date, end_date=end_date, adjust="qfq")
+                if hist is not None and hist.empty:
+                    hist = None
+                elif hist is not None:
+                    log("（数据来源: 东方财富）")
+            except Exception:
+                hist = None
+
+        # 回退在线2：网易163（东财被封时兜底；列名映射，无成交额/换手率列）
+        if hist is None:
+            try:
+                sym = f"sz{code}" if code.startswith(('0', '3')) else f"sh{code}"
+                hist = ak.stock_zh_a_daily(symbol=sym, start_date=start_date, end_date=end_date, adjust="qfq")
+                if hist is not None and not hist.empty:
+                    col_map = {'open': '开盘', 'high': '最高', 'low': '最低', 'close': '收盘', 'volume': '成交量'}
+                    hist = hist.rename(columns={k: v for k, v in col_map.items() if k in hist.columns})
+                    log("（数据来源: 网易163）")
+            except Exception:
+                hist = None
 
         if hist is not None and len(hist) > 0:
             log(hist.tail(30).to_string(index=False))
 
-            # 统计摘要
+            # 统计摘要（部分字段视数据源而定，缺列则跳过）
             recent = hist.tail(30)
             log("\n--- 近30日统计 ---")
             log(f"最新收盘价: {recent['收盘'].iloc[-1]:.2f}")
@@ -172,9 +193,12 @@ def analyze_stock(code: str, output_file: str = None):
             if len(recent) > 1:
                 change = ((recent['收盘'].iloc[-1] / recent['收盘'].iloc[0]) - 1) * 100
                 log(f"期间涨跌幅: {change:.2f}%")
-            log(f"日均成交量: {recent['成交量'].mean() / 10000:.2f}万手")
-            log(f"日均成交额: {recent['成交额'].mean() / 1e8:.2f}亿元")
-            log(f"日均换手率: {recent['换手率'].mean():.2f}%")
+            if '成交量' in recent.columns:
+                log(f"日均成交量: {recent['成交量'].mean() / 10000:.2f}万手")
+            if '成交额' in recent.columns:
+                log(f"日均成交额: {recent['成交额'].mean() / 1e8:.2f}亿元")
+            if '换手率' in recent.columns:
+                log(f"日均换手率: {recent['换手率'].mean():.2f}%")
         else:
             log("无历史数据")
     except Exception as e:
@@ -184,11 +208,9 @@ def analyze_stock(code: str, output_file: str = None):
     log("\n【4. 估值指标】")
     log("-" * 50)
     try:
-        # 使用雪球接口获取详细估值数据
-        xq_data = ak.stock_individual_spot_xq(symbol=code_with_prefix)
-        if xq_data is not None and len(xq_data) > 0:
-            # 转换为字典便于查询
-            xq_dict = dict(zip(xq_data['item'], xq_data['value']))
+        # 复用步骤1已获取的 data（雪球/腾讯），不重复请求
+        xq_dict = data if data else {}
+        if xq_dict:
             log(f"市盈率(动态): {xq_dict.get('市盈率(动)', 'N/A')}")
             log(f"市盈率(静态): {xq_dict.get('市盈率(静)', 'N/A')}")
             log(f"市盈率(TTM): {xq_dict.get('市盈率(TTM)', 'N/A')}")

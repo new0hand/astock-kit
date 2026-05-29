@@ -134,32 +134,43 @@ python3 stock_analyzer.py 000001 -o report.txt
 
 ## 数据源详情
 
-所有在线数据均通过 [AKShare](https://github.com/akfamily/akshare) 库调用，AKShare 是开源的 Python 金融数据接口库，封装了多个公开数据源。这些接口均为**非官方爬虫接口**，不是授权 API，可能随时变动。
+在线数据**大部分**通过 [AKShare](https://github.com/akfamily/akshare) 库调用（开源的 Python 金融数据接口库，封装多个公开数据源，均为**非官方爬虫接口**，不是授权 API，可能随时变动）。**例外：实时行情的雪球/腾讯/东财/新浪四个源都是自写 HTTP 请求，不经 AKShare**，等于不受 AKShare 上游变动连累的独立通道。
 
-### 脚本 → AKShare 函数 → 数据源对照表
+> **实时行情四级回退**：共享模块 **`scripts/realtime_source.py`**，回退链 **雪球（自写预热）→ 腾讯财经 → 东方财富 push2 → 新浪**，`get_realtime_quote` / `get_valuation` / `analyze_investment` / `stock_analyzer` 统一调用 `get_spot_dict()`。雪球可用时数据最全；逐级降级。
+>
+> **雪球为什么自写预热**：AKShare 的 `stock_individual_spot_xq` 在 `akshare/stock/cons.py` 写死了一个 `xq_a_token`，会过期，过期后返回 `error_code 400016`。本 skill 不依赖那个常量，而是先访问 `xueqiu.com` 让服务器**现发新 cookie** 再请求，规避旧 token 过期。所以雪球能稳定拿到含估值的全字段。
+>
+> **各源字段覆盖**：雪球最全（动/静/TTM PE、股息率、每股、52 周）；腾讯有 PE(TTM)/PB；东财 push2 有行情+换手/量比无估值；新浪仅基础行情。某源缺的字段在结果里留空。
 
-| 脚本 | AKShare 函数 | 数据源 | 代理兼容 | 说明 |
+### 脚本 → 函数 → 数据源对照表
+
+| 脚本 | 函数 | 数据源 | 代理兼容 | 说明 |
 |------|-------------|--------|---------|------|
-| `get_realtime_quote.py` | `stock_individual_spot_xq()` | 雪球 | ✅ 可挂代理 | 单只股票实时行情、PE/PB/股息率 |
-| `get_realtime_quote.py` | `stock_zh_a_spot_em()` | 东方财富 | ❌ 已封 | 备用回退，目前不可用 |
+| `get_realtime_quote.py` | `realtime_source.get_spot_dict()` → 雪球（自写预热 HTTP） | 雪球 | ✅ 可挂代理 | 实时行情主源，字段最全 |
+| `get_realtime_quote.py` | `realtime_source.get_spot_dict()` → `qt.gtimg.cn`（自写 HTTP） | 腾讯财经 | ✅ 可挂代理 | 回退1，国内直连最快 |
+| `get_realtime_quote.py` | `realtime_source.get_spot_dict()` → `push2/stock/get`（自写 HTTP） | 东方财富 | ⚠️ 必须直连 | 回退2，反爬激进 |
+| `get_realtime_quote.py` | `realtime_source.get_spot_dict()` → `hq.sinajs.cn`（自写 HTTP） | 新浪 | ✅ 可挂代理 | 回退3兜底，仅基础行情 |
 | `get_history_kline.py` | 本地 DuckDB 查询 | BaoStock 离线数据 | ✅ 本地 | 优先使用，最快最稳 |
 | `get_history_kline.py` | `stock_zh_a_hist()` | 东方财富 | ❌ 已封 | 在线回退1，目前不可用 |
 | `get_history_kline.py` | `stock_zh_a_daily()` | 网易163 | ✅ 可挂代理 | 在线回退2 |
 | `calc_technical.py` | 同 `get_history_kline.py` | 同上 | 同上 | 获取K线后本地计算指标 |
 | `get_fund_flow.py` | `stock_individual_fund_flow()` | 东方财富 | ⚠️ 必须直连 | 个股每日资金流向明细，需关代理 |
 | `get_financial.py` | `stock_financial_abstract_ths()` | 同花顺 | ✅ 可挂代理 | 财务摘要（营收、利润、ROE等） |
-| `get_valuation.py` | `stock_individual_spot_xq()` | 雪球 | ✅ 可挂代理 | 估值指标 PE/PB/股息率 |
+| `get_valuation.py` | `realtime_source.get_spot_dict()` → 四级回退 | 雪球→腾讯→东财→新浪 | ✅ 可挂代理 | 估值 PE/PB/股息率（雪球满血，降级后部分字段留空） |
 | `get_shareholders.py` | `stock_main_stock_holder()` | 同花顺 | ✅ 可挂代理 | 十大股东 |
 | `get_dividend.py` | `stock_history_dividend_detail()` | 同花顺 | ✅ 可挂代理 | 历史分红记录 |
-| `analyze_investment.py` | 综合以上多个函数 | 多数据源 | 部分 | 四维度智能评分 |
-| `stock_analyzer.py` | 综合以上多个函数 | 多数据源 | 部分 | 全量综合分析报告 |
+| `analyze_investment.py` | 综合以上多个函数（实时行情走 `realtime_source`，K线加网易163回退） | 多数据源 | 部分 | 四维度智能评分 |
+| `stock_analyzer.py` | 综合以上多个函数（实时行情走 `realtime_source`，K线加网易163回退） | 多数据源 | 部分 | 全量综合分析报告 |
 | `download_fast.py` | BaoStock 原生接口 | BaoStock | ✅ 可挂代理 | 全市场批量下载，免费不限流 |
 
 ### 数据源状态汇总
 
 | 数据源 | 域名 | 状态 | 备注 |
 |--------|------|------|------|
-| 雪球 | xueqiu.com | ✅ 稳定 | 实时行情、估值，代理下可用 |
+| 雪球 | xueqiu.com | ✅ 自写预热可用 | 实时行情主源，字段最全。akshare 内置 token 已过期(400016)，本 skill 自写预热拿新 token，不走 akshare 那个常量 |
+| 腾讯财经 | qt.gtimg.cn | ✅ 稳定 | 实时行情回退1，自写 HTTP，国内直连最快，有 PE(TTM)/PB |
+| 东方财富(实时) | push2.eastmoney.com | ⚠️ 需直连 | 实时行情回退2，`stock/get` 接口，反爬激进需关代理，无估值字段 |
+| 新浪(实时) | hq.sinajs.cn | ✅ 稳定 | 实时行情回退3兜底，自写 HTTP，仅基础行情无估值 |
 | 同花顺 | data.10jqka.com.cn | ✅ 稳定 | 财务、股东、分红，代理下可用 |
 | 网易163 | money.163.com | ✅ 可用 | 历史K线备用源，代理下可用 |
 | BaoStock | baostock.com | ✅ 稳定 | 批量历史数据下载，免费不限流 |
@@ -167,10 +178,10 @@ python3 stock_analyzer.py 000001 -o report.txt
 
 ### 代理/网络注意事项
 
-- **东方财富**反爬非常严格，同一 IP 高频请求会被封。资金流向接口 (`push2his.eastmoney.com`) 是目前唯一还能用的东方财富接口，但**必须直连**，不能走代理
+- **东方财富**反爬非常严格，同一 IP 高频请求会被封。还能用的东财接口（资金流向 `push2his.eastmoney.com`、实时行情 `push2.eastmoney.com/stock/get`）都**必须直连**，不能走代理；全市场行情/K线接口已封
 - 如果使用 v2rayN/Clash 等代理工具，Python 的 `requests` 库会读取 macOS 系统代理设置（即使环境变量为空），导致请求被代理转发后失败
 - 解决方案：关闭代理工具的 TUN 模式 / 系统代理，或将 `eastmoney.com` 加入直连规则
-- 其他数据源（雪球、同花顺、网易、BaoStock）挂代理也能正常使用
+- 其他数据源（雪球、腾讯财经、同花顺、网易、BaoStock）挂代理也能正常使用
 
 ### 缓存机制
 
@@ -227,12 +238,12 @@ bash test_all.sh
 | #13 | Markdown 回测报告 | `backtest.py ma20 -o` | 本地 BaoStock |
 | #14 | 全市场回测 TOP10 | `backtest.py ma20 --all` | 本地 BaoStock |
 | **第三部分：实时数据（AKShare 在线）** | | | |
-| #15-16 | 实时行情 | `get_realtime_quote.py` | 雪球 |
+| #15-16 | 实时行情 | `get_realtime_quote.py` | 雪球 → 腾讯 → 东财 → 新浪 |
 | #17 | 历史K线 | `get_history_kline.py` | 本地 → 东方财富 → 网易163 |
 | #18 | 技术指标 MA/MACD/RSI/KDJ/BOLL | `calc_technical.py` | 本地 → 东方财富 → 网易163 |
 | #19 | 资金流向 | `get_fund_flow.py` | 东方财富（需直连） |
 | #20 | 财务数据 | `get_financial.py` | 同花顺 |
-| #21 | 估值 PE/PB/股息率 | `get_valuation.py` | 雪球 |
+| #21 | 估值 PE/PB/股息率 | `get_valuation.py` | 雪球 → 腾讯 → 东财 → 新浪 |
 | #22 | 股东信息 | `get_shareholders.py` | 同花顺 |
 | #23 | 分红数据 | `get_dividend.py` | 同花顺 |
 | **第四部分：智能分析** | | | |
@@ -276,13 +287,14 @@ astock-kit/
     ├── SKILL.md                       # Skill 定义（Hermes 读取）
     ├── config.yaml                    # 配置（股票池、定时任务、缓存）
     ├── references/                    # API 文档
-    ├── scripts/                       # AKShare 在线查询脚本
-    │   ├── get_realtime_quote.py      # 实时行情（雪球）
+    ├── scripts/                       # 在线查询脚本
+    │   ├── realtime_source.py         # 实时行情共享模块（雪球→腾讯→东财→新浪 四级回退）
+    │   ├── get_realtime_quote.py      # 实时行情（走共享模块四级回退）
     │   ├── get_history_kline.py       # 历史K线（本地→东方财富→网易163）
     │   ├── calc_technical.py          # 技术指标 MA/MACD/RSI/KDJ/BOLL
     │   ├── get_fund_flow.py           # 资金流向（东方财富，需直连）
     │   ├── get_financial.py           # 财务数据（同花顺）
-    │   ├── get_valuation.py           # 估值 PE/PB（雪球）
+    │   ├── get_valuation.py           # 估值 PE/PB（走共享模块四级回退）
     │   ├── get_shareholders.py        # 股东信息（同花顺）
     │   ├── get_dividend.py            # 分红记录（同花顺）
     │   ├── analyze_investment.py      # 智能投资分析（四维度评分）

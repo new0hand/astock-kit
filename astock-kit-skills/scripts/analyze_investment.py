@@ -24,6 +24,7 @@ except ImportError:
     sys.exit(1)
 
 from calc_technical import calc_all_indicators, analyze_signals
+from realtime_source import get_spot_dict
 
 # 本地数据路径
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -62,24 +63,25 @@ class InvestmentAnalyzer:
         except:
             pass
         
-        # 实时行情（雪球，东方财富经常被封）
-        try:
-            xq_spot = ak.stock_individual_spot_xq(symbol=self.code_with_prefix)
-            if xq_spot is not None:
-                spot_data = dict(zip(xq_spot['item'], xq_spot['value']))
-                self.data['spot'] = pd.Series({
-                    '代码': self.code,
-                    '名称': spot_data.get('名称', ''),
-                    '最新价': spot_data.get('现价', 0),
-                    '涨跌幅': spot_data.get('涨幅', 0),
-                    '最高': spot_data.get('最高', 0),
-                    '最低': spot_data.get('最低', 0),
-                    '成交量': spot_data.get('成交量', 0),
-                    '成交额': spot_data.get('成交额', 0),
-                    '换手率': spot_data.get('换手率', 0),
-                })
-        except:
-            pass
+        # 实时行情 + 估值（雪球 → 腾讯 回退，统一走共享模块）
+        spot_data, spot_source = get_spot_dict(self.code, self.code_with_prefix)
+        if spot_data:
+            self.data['spot'] = pd.Series({
+                '代码': self.code,
+                '名称': spot_data.get('名称', ''),
+                '最新价': spot_data.get('现价', 0),
+                '涨跌幅': spot_data.get('涨幅', 0),
+                '最高': spot_data.get('最高', 0),
+                '最低': spot_data.get('最低', 0),
+                '成交量': spot_data.get('成交量', 0),
+                '成交额': spot_data.get('成交额', 0),
+                '换手率': spot_data.get('换手率', 0),
+                '市盈率-动态': spot_data.get('市盈率(动)', 0),
+                '市净率': spot_data.get('市净率', 0),
+            })
+            # 估值复用同一份数据，避免重复请求
+            self.data['valuation'] = spot_data
+            self.data['spot_source'] = spot_source
 
         # 历史K线（优先本地数据）
         try:
@@ -107,21 +109,32 @@ class InvestmentAnalyzer:
                 except:
                     kline = None
 
-            # 回退在线
+            # 回退在线1：东方财富（可能已封）
             if kline is None:
-                kline = ak.stock_zh_a_hist(symbol=self.code, period='daily', start_date=start, end_date=end, adjust='qfq')
+                try:
+                    kline = ak.stock_zh_a_hist(symbol=self.code, period='daily', start_date=start, end_date=end, adjust='qfq')
+                    if kline is not None and kline.empty:
+                        kline = None
+                except Exception:
+                    kline = None
+
+            # 回退在线2：网易163（东财被封时兜底）
+            if kline is None:
+                try:
+                    sym = f"sz{self.code}" if self.code.startswith(('0', '3')) else f"sh{self.code}"
+                    kline = ak.stock_zh_a_daily(symbol=sym, start_date=start, end_date=end, adjust='qfq')
+                    if kline is not None and not kline.empty:
+                        col_map = {'open': '开盘', 'high': '最高', 'low': '最低', 'close': '收盘', 'volume': '成交量'}
+                        kline = kline.rename(columns={k: v for k, v in col_map.items() if k in kline.columns})
+                except Exception:
+                    kline = None
 
             self.data['kline'] = kline
         except:
             pass
-        
-        # 雪球估值
-        try:
-            xq = ak.stock_individual_spot_xq(symbol=self.code_with_prefix)
-            self.data['valuation'] = dict(zip(xq['item'], xq['value'])) if xq is not None else {}
-        except:
-            pass
-        
+
+        # 估值已在上方实时行情步骤一并获取（self.data['valuation']），此处不再重复请求
+
         # 资金流向
         try:
             self.data['fund_flow'] = ak.stock_individual_fund_flow(stock=self.code, market=self.market)

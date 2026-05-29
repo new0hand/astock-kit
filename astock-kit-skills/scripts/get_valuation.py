@@ -18,6 +18,7 @@ except ImportError:
     sys.exit(1)
 
 from cache_manager import cache_get, cache_set
+from realtime_source import get_spot_dict
 
 
 def get_code_with_prefix(code: str) -> str:
@@ -41,22 +42,17 @@ def get_valuation(code: str, use_cache: bool = True):
             display_valuation(cached_data)
             return
 
-    try:
-        df = ak.stock_individual_spot_xq(symbol=symbol)
-        
-        if df is not None:
-            # 转换为 dict 列表
-            data = dict(zip(df['item'], df['value']))
-            
-            # 显示
-            display_valuation(data)
-            
-            # 写入缓存
-            if use_cache:
-                cache_set('valuation', data, symbol)
-                
-    except Exception as e:
-        print(f"获取失败: {e}")
+    # 雪球 → 腾讯 回退（统一走共享模块）
+    data, source = get_spot_dict(code, symbol)
+    if data:
+        print(f"（数据来源: {source}）")
+        if source == '腾讯':
+            print("注意: 腾讯源无动/静市盈率、股息率、每股指标，相关字段留空")
+        display_valuation(data)
+        if use_cache:
+            cache_set('valuation', data, symbol)
+    else:
+        print("所有数据源均获取失败（雪球、腾讯）")
 
 
 def display_valuation(data: dict):

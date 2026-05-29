@@ -5,6 +5,8 @@
 用法:
     python get_realtime_quote.py 002475
     python get_realtime_quote.py 002475 600519
+
+数据源统一走 realtime_source（雪球 → 腾讯 → 东财 → 新浪 四级回退）。
 """
 import argparse
 import sys
@@ -12,13 +14,13 @@ import warnings
 warnings.filterwarnings('ignore')
 
 try:
-    import akshare as ak
     import pandas as pd
 except ImportError:
-    print("请先安装依赖: pip install akshare pandas")
+    print("请先安装依赖: pip install pandas requests")
     sys.exit(1)
 
 from cache_manager import cache_get, cache_set
+from realtime_source import get_spot_dict
 
 
 def get_code_with_prefix(code: str) -> str:
@@ -31,7 +33,7 @@ def get_code_with_prefix(code: str) -> str:
 
 
 def get_realtime_quote(codes: list, use_cache: bool = True):
-    """获取实时行情（优先雪球，失败回退东方财富）"""
+    """获取实时行情（雪球 → 腾讯 → 东财 → 新浪 四级回退，统一走共享模块）"""
     print("正在获取实时行情...")
 
     results = []
@@ -46,48 +48,31 @@ def get_realtime_quote(codes: list, use_cache: bool = True):
                 results.append(cached_data)
                 continue
 
-        # 优先用雪球接口（稳定）
-        try:
-            df = ak.stock_individual_spot_xq(symbol=symbol)
-            if df is not None and not df.empty:
-                data = dict(zip(df['item'], df['value']))
-                row = {
-                    '代码': code,
-                    '名称': data.get('名称', ''),
-                    '现价': data.get('现价', ''),
-                    '涨幅%': data.get('涨幅', ''),
-                    '最高': data.get('最高', ''),
-                    '最低': data.get('最低', ''),
-                    '今开': data.get('今开', ''),
-                    '昨收': data.get('昨收', ''),
-                    '成交量': data.get('成交量', ''),
-                    '成交额': data.get('成交额', ''),
-                    '换手率': data.get('换手率', ''),
-                    '市盈率(TTM)': data.get('市盈率(TTM)', ''),
-                    '市净率': data.get('市净率', ''),
-                    '52周最高': data.get('52周最高', ''),
-                    '52周最低': data.get('52周最低', ''),
-                }
-                results.append(row)
-                if use_cache:
-                    cache_set('realtime', row, cache_key)
-                continue
-        except Exception:
-            pass
-
-        # 回退：东方财富
-        try:
-            df = ak.stock_zh_a_spot_em()
-            if df is not None:
-                match = df[df['代码'] == code]
-                if len(match) > 0:
-                    row = match.iloc[0].to_dict()
-                    results.append(row)
-                    continue
-        except Exception:
-            pass
-
-        print(f"  {code}: 所有数据源均获取失败")
+        data, source = get_spot_dict(code, symbol)
+        if data:
+            row = {
+                '代码': code,
+                '名称': data.get('名称', ''),
+                '现价': data.get('现价', ''),
+                '涨幅%': data.get('涨幅', ''),
+                '最高': data.get('最高', ''),
+                '最低': data.get('最低', ''),
+                '今开': data.get('今开', ''),
+                '昨收': data.get('昨收', ''),
+                '成交量': data.get('成交量', ''),
+                '成交额': data.get('成交额', ''),
+                '换手率': data.get('换手率', ''),
+                '市盈率(TTM)': data.get('市盈率(TTM)', ''),
+                '市净率': data.get('市净率', ''),
+                '52周最高': data.get('52周最高', ''),
+                '52周最低': data.get('52周最低', ''),
+                '来源': source,
+            }
+            results.append(row)
+            if use_cache:
+                cache_set('realtime', row, cache_key)
+        else:
+            print(f"  {code}: 所有数据源均获取失败（雪球、腾讯、东财、新浪）")
 
     if results:
         result_df = pd.DataFrame(results)
